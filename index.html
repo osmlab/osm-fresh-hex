@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+
+body {
+    font:14px/20px 'Helvetica Neue';
+    width:960px;
+    margin:0 auto;
+}
+
+h1 {
+    text-align:center;
+}
+
+.axis text {
+  font: 10px sans-serif;
+}
+
+.axis path,
+.axis line {
+  fill: none;
+  stroke: #000;
+  shape-rendering: crispEdges;
+}
+
+.hexagon {
+  fill: none;
+  stroke: #555;
+  stroke-width: .5px;
+}
+
+.stroke {
+  fill: none;
+  stroke: #000;
+  stroke-width: 3px;
+}
+
+.fill {
+  fill: #fff;
+}
+
+.land {
+  fill: #eee;
+}
+
+.boundary {
+  fill: none;
+  stroke: #fff;
+  stroke-width: .5px;
+}
+
+</style>
+<body>
+<h1>Hexbin Edits on OpenStreetMap</h1>
+<script src="http://d3js.org/d3.v3.min.js"></script>
+<script src="osm-stream.js"></script>
+<script src="http://d3js.org/topojson.v0.min.js"></script>
+<script src="http://d3js.org/d3.hexbin.v0.min.js?5c6e4f0"></script>
+<script>
+
+var margin = {top: 20, right: 20, bottom: 30, left: 40},
+    width = 960 - margin.left - margin.right,
+    height = 500 - margin.top - margin.bottom;
+
+var color = d3.scale.sqrt()
+    .domain([0, 20])
+    .range(["white", "steelblue"])
+    .interpolate(d3.interpolateLab);
+
+var hexbin = d3.hexbin()
+    .size([width, height])
+    .radius(10);
+
+var x = d3.scale.linear()
+    .domain([-180, 180])
+    .range([0, width]);
+
+var y = d3.scale.linear()
+    .domain([-90, 90])
+    .range([height, 0]);
+
+var xAxis = d3.svg.axis()
+    .scale(x)
+    .orient("bottom")
+    .tickSize(6, -height);
+
+var yAxis = d3.svg.axis()
+    .scale(y)
+    .orient("left")
+    .tickSize(6, -width);
+
+var svg = d3.select("body").append("svg")
+    .attr("width", width + margin.left + margin.right)
+    .attr("height", height + margin.top + margin.bottom)
+  .append("g")
+    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+svg.append("clipPath")
+    .attr("id", "clip")
+  .append("rect")
+    .attr("class", "mesh")
+    .attr("width", width)
+    .attr("height", height);
+
+function update(points) {
+    var sel = svg.append("g")
+        .attr("clip-path", "url(#clip)")
+      .selectAll(".hexagon")
+        .data(hexbin(points));
+    var enter = sel.enter().append("path");
+    var hexdata = hexbin.hexagon();
+    color.domain(d3.extent(sel.data(), function(d) { return d.length; }));
+    sel.attr("class", "hexagon")
+        .attr("d", hexbin.hexagon())
+        .attr("transform", function(d) { return "translate(" + d.x + "," + d.y + ")"; })
+        .style("fill", function(d) { return color(d.length); });
+}
+
+var all = [];
+
+osmStream.runFn(function(err, pts) {
+    all = all.concat(pts.filter(function(p) {
+        return p.neu;
+    }).map(function(p) {
+        return [x(p.neu.lon), y(p.neu.lat)];
+    }));
+    update(all);
+}, 1000, -1);
+
+svg.append("g")
+    .attr("class", "y axis")
+    .call(yAxis);
+
+svg.append("g")
+    .attr("class", "x axis")
+    .attr("transform", "translate(0," + height + ")")
+    .call(xAxis);
+
+d3.json("world-50m.json", function(error, world) {
+
+var projection = d3.geo.equirectangular()
+    .scale(143.1)
+    .translate([width / 2, height / 2])
+    .precision(.1);
+
+var path = d3.geo.path()
+    .projection(projection);
+  svg.insert("path", ".graticule")
+      .datum(topojson.object(world, world.objects.land))
+      .attr("class", "land")
+      .attr("d", path);
+});
+
+</script>
